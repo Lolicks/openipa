@@ -5,6 +5,7 @@
 
 use crate::diagnostics::Diagnostic;
 use crate::macho::{parse_macho_file, MachOInfo};
+use crate::toolchain::cli_path;
 use crate::toolchain::Toolchain;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -91,23 +92,25 @@ impl<'a> Linker<'a> {
             .arg(&self.min_os)
             .arg(&self.sdk_version)
             .arg("-o")
-            .arg(output);
+            .arg(cli_path(output));
         for obj in objects {
-            cmd.arg(obj);
+            cmd.arg(cli_path(obj));
         }
         let mut diagnostics = Vec::new();
         for path in &self.framework_search_paths {
-            cmd.arg("-F").arg(path);
+            cmd.arg("-F").arg(cli_path(path));
         }
         if let Some(sdk) = &self.sdk {
-            cmd.arg("-syslibroot").arg(sdk);
-            cmd.arg("-L").arg(sdk.join("usr/lib"));
+            cmd.arg("-syslibroot").arg(cli_path(sdk));
+            cmd.arg("-L").arg(cli_path(sdk.join("usr/lib")));
             cmd.arg("-lSystem");
             if self.swift_runtime {
-                cmd.arg("-L").arg(sdk.join("usr/lib/swift/iphoneos"));
+                cmd.arg("-L")
+                    .arg(cli_path(sdk.join("usr/lib/swift/iphoneos")));
                 cmd.arg("-lswiftCore");
             }
-            cmd.arg("-F").arg(sdk.join("System/Library/Frameworks"));
+            cmd.arg("-F")
+                .arg(cli_path(sdk.join("System/Library/Frameworks")));
             for framework in &self.frameworks {
                 let name = framework
                     .trim_end_matches(".framework")

@@ -2,13 +2,42 @@
 
 ## Требования
 
-- Linux x86_64 (Ubuntu 24.04+, Debian 12+ или современный дистрибутив)
+- Linux x86_64 (Ubuntu 24.04+, Debian 12+), **Windows 10/11 x86_64** или macOS
 - Rust 1.80+ (`rust-toolchain.toml`)
 - Clang/LLVM с target AArch64: `clang`, `clang++`
-- `ld64.lld` из пакета `lld` (проверьте `which ld64.lld-22`)
+- `ld64.lld` из пакета `lld` (Linux: `which ld64.lld-22`; Windows: `C:\Program Files\LLVM\bin\ld64.lld.exe`)
 - `zip` (для диагностики; IPA пишется встроенной Rust-реализацией ZIP)
 
-macOS, Xcode и удалённый Mac **не нужны** для C/Objective-C конвейера.
+macOS, Xcode и удалённый Mac **не нужны** для C/Objective-C конвейера — сборка
+одинаково работает на Linux и Windows.
+
+### Windows
+
+```powershell
+choco install llvm -y
+cargo build --release
+$env:Path += ";$PWD\target\release"
+openipa doctor
+```
+
+Если LLVM установлен не в PATH, задайте явные пути:
+
+```powershell
+$env:OPENIPA_CLANG = "C:\Program Files\LLVM\bin\clang.exe"
+$env:OPENIPA_CLANGXX = "C:\Program Files\LLVM\bin\clang++.exe"
+$env:OPENIPA_LD64_LLD = "C:\Program Files\LLVM\bin\ld64.lld.exe"
+```
+
+Создание тестовой SDK-фикстуры кроссплатформенно (нужен Python):
+
+```powershell
+python scripts\make_sdk_fixture.py $env:USERPROFILE\.openipa\test-sdk
+openipa sdk add $env:USERPROFILE\.openipa\test-sdk\iPhoneOS.sdk --name test-ios
+openipa build examples\HelloWorldApp\HelloWorldApp.xcodeproj --configuration release
+openipa validate build\HelloWorldApp.ipa
+```
+
+Внутри IPA всегда используются `/` как разделитель, независимо от хоста.
 
 ## Сборка OpenIPA
 

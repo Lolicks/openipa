@@ -39,14 +39,32 @@ Apple-артефактов, **не подменяются заглушками**
 
 ## Установка
 
-Требуется Linux x86_64, Rust 1.80+, Clang с поддержкой AArch64 и LLVM `ld64.lld`.
+Требуется Rust 1.80+, Clang с поддержкой AArch64 и LLVM `ld64.lld`.
 
+**Linux:**
 ```sh
 sudo apt install clang lld          # Debian/Ubuntu: ld64.lld входит в lld
 cargo build --release
 install -m 755 target/release/openipa /usr/local/bin/openipa
 openipa doctor
 ```
+
+**Windows 10/11:**
+```powershell
+choco install llvm -y          # clang.exe, clang++.exe, ld64.lld.exe
+cargo build --release
+copy target\release\openipa.exe C:\Tools\openipa.exe
+# добавьте C:\Tools в PATH
+openipa doctor
+```
+
+Пути к инструментам можно задать явно через переменные окружения:
+`OPENIPA_CLANG`, `OPENIPA_CLANGXX`, `OPENIPA_LD64_LLD`, `OPENIPA_SWIFTC`,
+`OPENIPA_SWIFT_TOOLCHAIN`, `OPENIPA_AR`, `OPENIPA_ZIP`.
+
+`openipa build` одинаково работает на Linux и Windows: пути нормализуются к
+forward slashes перед передачей LLVM-инструментам, ZIP-архив IPA всегда
+использует разделитель `/` внутри архива.
 
 ## Быстрый старт
 

@@ -5,6 +5,7 @@
 use crate::diagnostics::Diagnostic;
 use crate::macho::parse_macho_file;
 use crate::project::BuildSettings;
+use crate::toolchain::cli_path;
 use crate::toolchain::Toolchain;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -125,9 +126,9 @@ impl<'a> ClangDriver<'a> {
         cmd.arg("-target")
             .arg(&self.target_triple)
             .arg("-c")
-            .arg(source)
+            .arg(cli_path(source))
             .arg("-o")
-            .arg(output)
+            .arg(cli_path(output))
             .arg("-fexceptions")
             .arg("-fno-common");
 
@@ -143,9 +144,9 @@ impl<'a> ClangDriver<'a> {
                     cmd.arg("-target")
                         .arg(&self.target_triple)
                         .arg("-c")
-                        .arg(source)
+                        .arg(cli_path(source))
                         .arg("-o")
-                        .arg(output)
+                        .arg(cli_path(output))
                         .arg("-fexceptions")
                         .arg("-fno-common");
                 }
@@ -164,9 +165,9 @@ impl<'a> ClangDriver<'a> {
                     cmd.arg("-target")
                         .arg(&self.target_triple)
                         .arg("-c")
-                        .arg(source)
+                        .arg(cli_path(source))
                         .arg("-o")
-                        .arg(output)
+                        .arg(cli_path(output))
                         .arg("-fexceptions")
                         .arg("-fno-common");
                 }
@@ -184,16 +185,17 @@ impl<'a> ClangDriver<'a> {
             cmd.arg("-fmodules");
         }
         if let Some(sdk) = &self.sdk {
-            cmd.arg("-isysroot").arg(sdk);
-            cmd.arg("-F").arg(sdk.join("System/Library/Frameworks"));
+            cmd.arg("-isysroot").arg(cli_path(sdk));
+            cmd.arg("-F")
+                .arg(cli_path(sdk.join("System/Library/Frameworks")));
         } else {
             cmd.arg("-nostdinc");
         }
         for p in &settings.framework_search_paths {
-            cmd.arg("-F").arg(p);
+            cmd.arg("-F").arg(cli_path(p));
         }
         for p in &settings.header_search_paths {
-            cmd.arg("-I").arg(p);
+            cmd.arg("-I").arg(cli_path(p));
         }
         for flag in &settings.other_c_flags {
             cmd.arg(flag);
