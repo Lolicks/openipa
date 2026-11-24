@@ -1,0 +1,143 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0000000000000000000A1008 /* UIKitAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000B1000 /* UIKitAppApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0000000000000000000B1000 /* UIKitAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode; path = "UIKitAppApp.swift"; sourceTree = "<group>"; parent = 0000000000000000000A1009; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+	0000000000000000000A1009 /* UIKitApp */ = {
+		isa = PBXGroup;
+		children = (
+				0000000000000000000B1000 /* UIKitAppApp.swift */,
+		);
+		path = UIKitApp;
+		sourceTree = "<group>";
+	};
+/* End PBXGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+	0000000000000000000A1004 /* Frameworks */ = {
+		isa = PBXFrameworksBuildPhase;
+		buildActionMask = 2147483647;
+		files = (
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+	};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+	0000000000000000000A1001 /* UIKitApp */ = {
+		isa = PBXNativeTarget;
+		buildConfigurationList = 0000000000000000000A1005 /* Build configuration list for PBXNativeTarget "UIKitApp" */;
+		buildPhases = (
+			0000000000000000000A1002 /* Sources */,
+			0000000000000000000A1004 /* Frameworks */,
+			0000000000000000000A1003 /* Resources */,
+		);
+		buildRules = (
+		);
+		dependencies = (
+		);
+		name = UIKitApp;
+		productName = UIKitApp;
+		productReference = 0000000000000000000C0000;
+		productType = "com.apple.product-type.application";
+	};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+	0000000000000000000A1000 /* Project object */ = {
+		isa = PBXProject;
+		attributes = { LastUpgradeCheck = 1500; };
+		buildConfigurationList = 0000000000000000000D0000;
+		compatibilityVersion = "Xcode 14.0";
+		developmentRegion = en;
+		knownRegions = ( en, Base );
+		mainGroup = 0000000000000000000A1009;
+		productRefGroup = 0000000000000000000A1009;
+		projectDirPath = "";
+		projectRoot = "";
+		targets = (
+			0000000000000000000A1001 /* UIKitApp */,
+		);
+	};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+	0000000000000000000A1003 /* Resources */ = {
+		isa = PBXResourcesBuildPhase;
+		buildActionMask = 2147483647;
+		files = (
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+	};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+	0000000000000000000A1002 /* Sources */ = {
+		isa = PBXSourcesBuildPhase;
+		buildActionMask = 2147483647;
+		files = (
+				0000000000000000000A1008 /* UIKitAppApp.swift in Sources */,
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+	};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+	0000000000000000000A1006 /* Debug */ = {
+		isa = XCBuildConfiguration;
+		buildSettings = {
+			IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+			INFOPLIST_FILE = "UIKitApp/Info.plist";
+			PRODUCT_BUNDLE_IDENTIFIER = com.example.UIKitApp;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			TARGETED_DEVICE_FAMILY = "1,2";
+			SWIFT_VERSION = 5.9;
+		};
+		name = Debug;
+	};
+	0000000000000000000A1007 /* Release */ = {
+		isa = XCBuildConfiguration;
+		buildSettings = {
+			IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+			INFOPLIST_FILE = "UIKitApp/Info.plist";
+			PRODUCT_BUNDLE_IDENTIFIER = com.example.UIKitApp;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SWIFT_OPTIMIZATION_LEVEL = "-O";
+			SWIFT_VERSION = 5.9;
+		};
+		name = Release;
+	};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+	0000000000000000000A1005 /* Build configuration list for PBXNativeTarget "UIKitApp" */ = {
+		isa = XCConfigurationList;
+		buildConfigurations = (
+			0000000000000000000A1006 /* Debug */,
+			0000000000000000000A1007 /* Release */,
+		);
+		defaultConfigurationIsVisible = 0;
+		defaultConfigurationName = Release;
+	};
+	0000000000000000000D0000 /* Build configuration list for PBXProject "UIKitApp" */ = {
+		isa = XCConfigurationList;
+		buildConfigurations = (
+		);
+		defaultConfigurationIsVisible = 0;
+	};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0000000000000000000A1000 /* Project object */;
+}
