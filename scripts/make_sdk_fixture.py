@@ -13,6 +13,7 @@ from pathlib import Path
 FRAMEWORKS = {
     "UIKit": [
         "_UIApplicationMain",
+        "_UIGraphicsGetCurrentContext",
         "_OBJC_CLASS_$_UIButton",
         "_OBJC_CLASS_$_UIColor",
         "_OBJC_CLASS_$_UIFont",
@@ -23,6 +24,8 @@ FRAMEWORKS = {
         "_OBJC_CLASS_$_UIResponder",
         "_OBJC_METACLASS_$_UIResponder",
         "_OBJC_CLASS_$_UIScreen",
+        "_OBJC_CLASS_$_UIView",
+        "_OBJC_METACLASS_$_UIView",
         "_OBJC_CLASS_$_UIViewController",
         "_OBJC_METACLASS_$_UIViewController",
         "_OBJC_CLASS_$_UIWindow",
@@ -32,9 +35,15 @@ FRAMEWORKS = {
         "_OBJC_METACLASS_$_NSObject",
         "_OBJC_CLASS_$_NSBundle",
         "_OBJC_CLASS_$_NSString",
+        "_OBJC_CLASS_$_NSTimer",
     ],
     "CoreFoundation": ["___CFConstantStringClassReference"],
-    "CoreGraphics": [],
+    "CoreGraphics": [
+        "_CGContextFillEllipseInRect",
+        "_CGContextFillRect",
+        "_CGContextSetFillColorWithColor",
+        "_CGContextSetRGBFillColor",
+    ],
     "SwiftUI": [],
 }
 OBJC = [

@@ -25,6 +25,7 @@ fn make_sdk(root: &Path) -> PathBuf {
         "/System/Library/Frameworks/UIKit.framework/UIKit",
         &[
             "_UIApplicationMain",
+            "_UIGraphicsGetCurrentContext",
             "_OBJC_CLASS_$_UIButton",
             "_OBJC_CLASS_$_UIColor",
             "_OBJC_CLASS_$_UIFont",
@@ -32,6 +33,8 @@ fn make_sdk(root: &Path) -> PathBuf {
             "_OBJC_CLASS_$_UIImageView",
             "_OBJC_CLASS_$_UILabel",
             "_OBJC_CLASS_$_UINavigationController",
+            "_OBJC_CLASS_$_UIView",
+            "_OBJC_METACLASS_$_UIView",
             "_OBJC_CLASS_$_UIResponder",
             "_OBJC_METACLASS_$_UIResponder",
             "_OBJC_CLASS_$_UIScreen",
@@ -48,6 +51,7 @@ fn make_sdk(root: &Path) -> PathBuf {
             "_OBJC_METACLASS_$_NSObject",
             "_OBJC_CLASS_$_NSBundle",
             "_OBJC_CLASS_$_NSString",
+            "_OBJC_CLASS_$_NSTimer",
         ],
     );
     tbd(
@@ -58,7 +62,12 @@ fn make_sdk(root: &Path) -> PathBuf {
     tbd(
         &frameworks.join("CoreGraphics.framework/CoreGraphics.tbd"),
         "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
-        &[],
+        &[
+            "_CGContextFillEllipseInRect",
+            "_CGContextFillRect",
+            "_CGContextSetFillColorWithColor",
+            "_CGContextSetRGBFillColor",
+        ],
     );
     tbd(
         &frameworks.join("SwiftUI.framework/SwiftUI.tbd"),
@@ -270,4 +279,78 @@ fn uikit_test_app_builds_with_resources() {
     assert_eq!(info.architecture, "arm64");
     assert!(info.dylibs.iter().any(|d| d.contains("UIKit")));
     assert!(info.dylibs.iter().any(|d| d.contains("Foundation")));
+}
+
+#[test]
+fn flappy_bird_app_builds_and_validates() {
+    if which::which("ld64.lld-22").is_err()
+        && which::which("ld64.lld-21").is_err()
+        && which::which("ld64.lld").is_err()
+    {
+        eprintln!("ld64.lld недоступен — тест пропущен");
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_openipa");
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&home).unwrap();
+    let sdk = make_sdk(tmp.path());
+
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/FlappyBirdApp");
+    copy_dir(
+        &base.join("FlappyBirdApp.xcodeproj"),
+        &tmp.path().join("FlappyBirdApp.xcodeproj"),
+    );
+    copy_dir(
+        &base.join("FlappyBirdApp"),
+        &tmp.path().join("FlappyBirdApp"),
+    );
+
+    let add = Command::new(bin)
+        .env("HOME", &home)
+        .args([
+            "sdk",
+            "add",
+            sdk.to_str().unwrap(),
+            "--name",
+            "test-ios",
+            "--no-color",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        add.status.success(),
+        "sdk add: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    let build = Command::new(bin)
+        .env("HOME", &home)
+        .current_dir(tmp.path())
+        .args([
+            "build",
+            "FlappyBirdApp.xcodeproj",
+            "--configuration",
+            "release",
+            "--no-color",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "build: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let ipa = tmp.path().join("build/FlappyBirdApp.ipa");
+    assert!(ipa.exists());
+
+    let validation = Command::new(bin)
+        .args(["validate", ipa.to_str().unwrap(), "--no-color"])
+        .output()
+        .unwrap();
+    assert!(validation.status.success());
+
+    let info = openipa::macho::parse_macho_file(&tmp.path().join("build/FlappyBirdApp")).unwrap();
+    assert_eq!(info.architecture, "arm64");
+    assert!(info.dylibs.iter().any(|d| d.contains("CoreGraphics")));
 }
