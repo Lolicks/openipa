@@ -32,7 +32,9 @@ fn make_sdk(root: &Path) -> PathBuf {
             "_OBJC_CLASS_$_UIImage",
             "_OBJC_CLASS_$_UIImageView",
             "_OBJC_CLASS_$_UILabel",
+            "_OBJC_CLASS_$_UIBlurEffect",
             "_OBJC_CLASS_$_UINavigationController",
+            "_OBJC_CLASS_$_UIVisualEffectView",
             "_OBJC_CLASS_$_UIView",
             "_OBJC_METACLASS_$_UIView",
             "_OBJC_CLASS_$_UIResponder",
@@ -63,8 +65,13 @@ fn make_sdk(root: &Path) -> PathBuf {
         &frameworks.join("CoreGraphics.framework/CoreGraphics.tbd"),
         "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
         &[
+            "_CGContextAddLineToPoint",
+            "_CGContextClosePath",
             "_CGContextFillEllipseInRect",
+            "_CGContextFillPath",
             "_CGContextFillRect",
+            "_CGContextMoveToPoint",
+            "_CGContextSetAlpha",
             "_CGContextSetFillColorWithColor",
             "_CGContextSetRGBFillColor",
         ],
@@ -77,7 +84,7 @@ fn make_sdk(root: &Path) -> PathBuf {
     tbd(
         &sdk.join("usr/lib/libSystem.tbd"),
         "/usr/lib/libSystem.B.dylib",
-        &[],
+        &["___stack_chk_fail", "___stack_chk_guard", "_memcpy"],
     );
     tbd(
         &sdk.join("usr/lib/libobjc.tbd"),
@@ -353,4 +360,83 @@ fn flappy_bird_app_builds_and_validates() {
     let info = openipa::macho::parse_macho_file(&tmp.path().join("build/FlappyBirdApp")).unwrap();
     assert_eq!(info.architecture, "arm64");
     assert!(info.dylibs.iter().any(|d| d.contains("CoreGraphics")));
+}
+
+#[test]
+fn flappy_bird_binary_has_3d_and_glass_features() {
+    if which::which("ld64.lld-22").is_err()
+        && which::which("ld64.lld-21").is_err()
+        && which::which("ld64.lld").is_err()
+    {
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_openipa");
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&home).unwrap();
+    let sdk = make_sdk(tmp.path());
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/FlappyBirdApp");
+    copy_dir(
+        &base.join("FlappyBirdApp.xcodeproj"),
+        &tmp.path().join("FlappyBirdApp.xcodeproj"),
+    );
+    copy_dir(
+        &base.join("FlappyBirdApp"),
+        &tmp.path().join("FlappyBirdApp"),
+    );
+
+    let add = Command::new(bin)
+        .env("HOME", &home)
+        .args([
+            "sdk",
+            "add",
+            sdk.to_str().unwrap(),
+            "--name",
+            "test-ios",
+            "--no-color",
+        ])
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let build = Command::new(bin)
+        .env("HOME", &home)
+        .current_dir(tmp.path())
+        .args([
+            "build",
+            "FlappyBirdApp.xcodeproj",
+            "--configuration",
+            "release",
+            "--no-color",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let exe = fs::read(tmp.path().join("build/FlappyBirdApp")).unwrap();
+    let strings = String::from_utf8_lossy(&exe);
+    // Objective-C class metadata содержит имена используемых классов.
+    assert!(
+        strings.contains("UIVisualEffectView"),
+        "нет liquid-glass HUD"
+    );
+    assert!(strings.contains("UIBlurEffect"), "нет blur-эффекта");
+    let info = openipa::macho::parse_macho_file(&tmp.path().join("build/FlappyBirdApp")).unwrap();
+    assert!(
+        info.dylibs.iter().any(|d| d.contains("CoreGraphics")),
+        "нет 3D/CG рендера"
+    );
+
+    let source = fs::read_to_string(base.join("FlappyBirdApp/main.m")).unwrap();
+    assert!(source.contains("drawCubeInContext:"), "нет 3D-проекции");
+    assert!(
+        source.contains("CGContextFillPath"),
+        "нет заливки 3D-граней"
+    );
+    assert!(source.contains("coinX"), "нет монет");
+    assert!(source.contains("shield"), "нет щита");
+    assert!(source.contains("particleLife"), "нет частиц");
 }

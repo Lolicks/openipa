@@ -26,6 +26,8 @@ FRAMEWORKS = {
         "_OBJC_CLASS_$_UIScreen",
         "_OBJC_CLASS_$_UIView",
         "_OBJC_METACLASS_$_UIView",
+        "_OBJC_CLASS_$_UIBlurEffect",
+        "_OBJC_CLASS_$_UIVisualEffectView",
         "_OBJC_CLASS_$_UIViewController",
         "_OBJC_METACLASS_$_UIViewController",
         "_OBJC_CLASS_$_UIWindow",
@@ -39,8 +41,13 @@ FRAMEWORKS = {
     ],
     "CoreFoundation": ["___CFConstantStringClassReference"],
     "CoreGraphics": [
+        "_CGContextAddLineToPoint",
+        "_CGContextClosePath",
         "_CGContextFillEllipseInRect",
+        "_CGContextFillPath",
         "_CGContextFillRect",
+        "_CGContextMoveToPoint",
+        "_CGContextSetAlpha",
         "_CGContextSetFillColorWithColor",
         "_CGContextSetRGBFillColor",
     ],
@@ -93,7 +100,7 @@ def main() -> int:
     tbd(
         sdk / "usr/lib/libSystem.tbd",
         "/usr/lib/libSystem.B.dylib",
-        [],
+        ["___stack_chk_fail", "___stack_chk_guard", "_memcpy"],
     )
     tbd(sdk / "usr/lib/libobjc.tbd", "/usr/lib/libobjc.A.dylib", OBJC)
     (sdk / "usr/include").mkdir(parents=True, exist_ok=True)

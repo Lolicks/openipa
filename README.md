@@ -181,8 +181,9 @@ openipa validate build/UIKitTestApp.ipa
 
 ## Игра Flappy Bird
 
-`examples/FlappyBirdApp` — настоящая игра на UIKit + CoreGraphics: касания,
-гравитация, трубы, счёт и перезапуск. Собирается одной командой:
+`examples/FlappyBirdApp` — игра на UIKit + CoreGraphics: касания, гравитация,
+трубы, счёт, рестарт; плюс software-3D куб на фоне, liquid-glass HUD
+(`UIVisualEffectView` + `UIBlurEffect`), монеты, щит и частицы. Собирается одной командой:
 
 ```sh
 openipa build examples/FlappyBirdApp/FlappyBirdApp.xcodeproj --configuration release
@@ -195,10 +196,11 @@ openipa validate build/FlappyBirdApp.ipa
 cargo test
 ```
 
-36 тестов, включая интеграционные: реальная компиляция C и Objective-C/UIKit в
+37 тестов, включая интеграционные: реальная компиляция C и Objective-C/UIKit в
 ARM64 Mach-O через clang, линковка через `ld64.lld`, сборка HelloWorldApp,
-UIKitTestApp (ресурсы) и FlappyBirdApp (CoreGraphics) с валидацией, разбор
-xcconfig, Diagnostic Engine на намеренно испорченных проектах.
+UIKitTestApp (ресурсы) и FlappyBirdApp (3D + liquid glass + бусты) с валидацией,
+проверка 3D/glass-символов в бинарнике, разбор xcconfig, Diagnostic Engine на
+намеренно испорченных проектах.
 
 ## Ограничения readiness-критериев
 
