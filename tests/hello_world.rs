@@ -25,9 +25,13 @@ fn make_sdk(root: &Path) -> PathBuf {
         "/System/Library/Frameworks/UIKit.framework/UIKit",
         &[
             "_UIApplicationMain",
+            "_OBJC_CLASS_$_UIButton",
             "_OBJC_CLASS_$_UIColor",
             "_OBJC_CLASS_$_UIFont",
+            "_OBJC_CLASS_$_UIImage",
+            "_OBJC_CLASS_$_UIImageView",
             "_OBJC_CLASS_$_UILabel",
+            "_OBJC_CLASS_$_UINavigationController",
             "_OBJC_CLASS_$_UIResponder",
             "_OBJC_METACLASS_$_UIResponder",
             "_OBJC_CLASS_$_UIScreen",
@@ -39,7 +43,12 @@ fn make_sdk(root: &Path) -> PathBuf {
     tbd(
         &frameworks.join("Foundation.framework/Foundation.tbd"),
         "/System/Library/Frameworks/Foundation.framework/Foundation",
-        &["_OBJC_CLASS_$_NSObject", "_OBJC_METACLASS_$_NSObject"],
+        &[
+            "_OBJC_CLASS_$_NSObject",
+            "_OBJC_METACLASS_$_NSObject",
+            "_OBJC_CLASS_$_NSBundle",
+            "_OBJC_CLASS_$_NSString",
+        ],
     );
     tbd(
         &frameworks.join("CoreFoundation.framework/CoreFoundation.tbd"),
@@ -181,4 +190,84 @@ fn hello_world_uikit_app_builds_and_validates() {
     assert_eq!(info.filetype_name, "MH_EXECUTE");
     assert!(info.dylibs.iter().any(|d| d.contains("UIKit")));
     assert!(info.dylibs.iter().any(|d| d.contains("libobjc")));
+}
+
+#[test]
+fn uikit_test_app_builds_with_resources() {
+    if which::which("ld64.lld-22").is_err()
+        && which::which("ld64.lld-21").is_err()
+        && which::which("ld64.lld").is_err()
+    {
+        eprintln!("ld64.lld недоступен — тест пропущен");
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_openipa");
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&home).unwrap();
+    let sdk = make_sdk(tmp.path());
+
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/UIKitTestApp");
+    copy_dir(
+        &base.join("UIKitTestApp.xcodeproj"),
+        &tmp.path().join("UIKitTestApp.xcodeproj"),
+    );
+    copy_dir(&base.join("UIKitTestApp"), &tmp.path().join("UIKitTestApp"));
+
+    let add = Command::new(bin)
+        .env("HOME", &home)
+        .args([
+            "sdk",
+            "add",
+            sdk.to_str().unwrap(),
+            "--name",
+            "test-ios",
+            "--no-color",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        add.status.success(),
+        "sdk add: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    let build = Command::new(bin)
+        .env("HOME", &home)
+        .current_dir(tmp.path())
+        .args([
+            "build",
+            "UIKitTestApp.xcodeproj",
+            "--configuration",
+            "release",
+            "--no-color",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "build: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let ipa = tmp.path().join("build/UIKitTestApp.ipa");
+    assert!(ipa.exists());
+    let file = fs::File::open(&ipa).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let names: Vec<String> = (0..archive.len())
+        .filter_map(|i| archive.by_index(i).ok().map(|e| e.name().to_string()))
+        .collect();
+    assert!(
+        names.iter().any(|n| n.ends_with("banner.png")),
+        "нет banner.png"
+    );
+    assert!(
+        names.iter().any(|n| n.ends_with("message.txt")),
+        "нет message.txt"
+    );
+
+    let info = openipa::macho::parse_macho_file(&tmp.path().join("build/UIKitTestApp")).unwrap();
+    assert_eq!(info.architecture, "arm64");
+    assert!(info.dylibs.iter().any(|d| d.contains("UIKit")));
+    assert!(info.dylibs.iter().any(|d| d.contains("Foundation")));
 }

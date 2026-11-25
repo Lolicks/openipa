@@ -156,16 +156,27 @@ openipa validate build/HelloWorldApp.ipa
 Фикстура содержит только link-time TBD-стабы — это не Apple SDK. См.
 [examples/HelloWorldApp/README.md](examples/HelloWorldApp/README.md).
 
+## Тест интерфейса UIKit
+
+`examples/UIKitTestApp` — проект с `UILabel`, `UIButton`, target-action,
+двумя экранами через `UINavigationController` и загрузкой `message.txt` /
+`banner.png` из `.app` через `NSBundle`. Собирается и валидируется так же:
+
+```sh
+openipa build examples/UIKitTestApp/UIKitTestApp.xcodeproj --configuration release
+openipa validate build/UIKitTestApp.ipa
+```
+
 ## Тесты
 
 ```sh
 cargo test
 ```
 
-22 теста, включая интеграционные: реальная компиляция C и Objective-C/UIKit в
-ARM64 Mach-O через clang, линковка через `ld64.lld`, сборка HelloWorldApp в IPA и
-его валидация, разбор xcconfig и раскрытие переменных, imageset/app icon с idiom
-и scale.
+23 теста, включая интеграционные: реальная компиляция C и Objective-C/UIKit в
+ARM64 Mach-O через clang, линковка через `ld64.lld`, сборка HelloWorldApp и
+UIKitTestApp (ресурсы внутри IPA) с валидацией, разбор xcconfig и раскрытие
+переменных, imageset/app icon с idiom и scale.
 
 ## Ограничения readiness-критериев
 

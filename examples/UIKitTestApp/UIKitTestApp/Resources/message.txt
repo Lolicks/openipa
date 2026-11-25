@@ -1,0 +1,2 @@
+Hello from OpenIPA!
+Resources are loaded from the app bundle via NSBundle.
