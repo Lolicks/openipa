@@ -142,11 +142,15 @@ impl<'a> Linker<'a> {
             eprintln!("[ld64.lld] {display}\n{stderr}");
         }
         if !out.status.success() {
-            bail!(
-                "линковка завершилась с кодом {}:\n{}",
-                out.status.code().unwrap_or(-1),
-                stderr.trim_end()
-            );
+            return Err(crate::compiler::CompilerError {
+                tool: "ld64.lld",
+                message: format!(
+                    "линковка завершилась с кодом {}",
+                    out.status.code().unwrap_or(-1)
+                ),
+                stderr,
+            }
+            .into());
         }
         let info = parse_macho_file(output)?;
         if info.architecture != "arm64" || info.filetype_name != "MH_EXECUTE" {

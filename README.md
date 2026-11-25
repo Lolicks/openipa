@@ -77,6 +77,18 @@ openipa validate build/MyApp.ipa
 openipa inspect build/MyApp.ipa
 ```
 
+### Диагностика
+
+```sh
+openipa check MyApp.xcodeproj            # проверки до компиляции
+openipa check MyApp.xcodeproj --strict   # warnings становятся ошибками
+openipa check MyApp.xcodeproj --json
+openipa explain E0102
+```
+
+Все проверки выполняются автоматически и в `openipa build`; при ошибках
+компиляторы не запускаются. Подробности — [docs/diagnostics.md](docs/diagnostics.md).
+
 ### SDK
 
 OpenIPA не скачивает и не распространяет Apple SDK. SDK должен быть получен
@@ -173,10 +185,10 @@ openipa validate build/UIKitTestApp.ipa
 cargo test
 ```
 
-23 теста, включая интеграционные: реальная компиляция C и Objective-C/UIKit в
+35 тестов, включая интеграционные: реальная компиляция C и Objective-C/UIKit в
 ARM64 Mach-O через clang, линковка через `ld64.lld`, сборка HelloWorldApp и
-UIKitTestApp (ресурсы внутри IPA) с валидацией, разбор xcconfig и раскрытие
-переменных, imageset/app icon с idiom и scale.
+UIKitTestApp (ресурсы внутри IPA) с валидацией, разбор xcconfig, Diagnostic Engine
+на намеренно испорченных проектах (`check`, `--strict`, `--json`, compiler output).
 
 ## Ограничения readiness-критериев
 

@@ -7,6 +7,7 @@
 
 pub mod assets;
 pub mod build;
+pub mod check;
 pub mod cli;
 pub mod compiler;
 pub mod config;

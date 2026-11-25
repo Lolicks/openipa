@@ -213,13 +213,17 @@ impl<'a> ClangDriver<'a> {
             }
         }
         if !out.status.success() {
-            bail!(
-                "{} компиляция {} завершилась с кодом {}:\n{}",
-                lang.name(),
-                source.display(),
-                out.status.code().unwrap_or(-1),
-                stderr.trim_end()
-            );
+            return Err(super::CompilerError {
+                tool: "clang",
+                message: format!(
+                    "{} компиляция {} завершилась с кодом {}",
+                    lang.name(),
+                    cli_path(source),
+                    out.status.code().unwrap_or(-1)
+                ),
+                stderr,
+            }
+            .into());
         }
         if !output.exists() {
             bail!("clang не создал объектный файл {}", output.display());

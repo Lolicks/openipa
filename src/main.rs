@@ -4,13 +4,18 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use openipa::assets;
 use openipa::build::{self, BuildCache};
+use openipa::check::{self, CheckOptions};
 use openipa::cli::{exit, Cli, Command, Configuration, PackageCommand, SdkCommand, TemplateKind};
-use openipa::compiler::{ClangDriver, SwiftDriver};
+use openipa::compiler::{ClangDriver, CompilerError, SwiftCapability, SwiftDriver};
 use openipa::config::{Config, OutputFormat};
-use openipa::diagnostics::{Diagnostic, DiagnosticBundle, Severity};
+use openipa::diagnostics::{
+    self, compiler as compiler_diag, Diagnostic, DiagnosticBundle, Severity,
+};
 use openipa::linker::Linker;
 use openipa::packager::{self, default_info_plist, BundleOptions};
 use openipa::project::info_plist;
+use openipa::project::{Target, XcodeProject};
+use openipa::sdk::SdkReport;
 use openipa::sdk::{self, SdkRegistry};
 use openipa::toolchain::Toolchain;
 use openipa::validator;
@@ -50,27 +55,32 @@ fn print_diagnostics(diags: &[Diagnostic], cfg: &Config, colored: bool) {
         println!("{}", bundle.to_json_pretty().unwrap());
         return;
     }
-    for d in diags {
-        let (tag, code) = match d.severity {
-            Severity::Error => ("error", "1;31"),
-            Severity::Warning => ("warning", "1;33"),
-            Severity::Note => ("note", "1;34"),
-        };
-        eprintln!(
-            "  {} [{}]: {}",
-            paint(tag, code, colored),
-            paint(&d.code, "1", colored),
-            d.message
-        );
-        if let Some(detail) = &d.detail {
-            eprintln!("      {detail}");
+    eprint!("{}", diagnostics::render(diags, colored));
+}
+
+fn print_compiler_output(raw: &str, cfg: &Config, colored: bool, verbose: bool) {
+    let diags = compiler_diag::parse(raw);
+    print_diagnostics(&diags, cfg, colored);
+    if (verbose || diags.is_empty()) && !raw.trim().is_empty() {
+        eprintln!("--- original compiler output ---");
+        eprint!("{raw}");
+        if !raw.ends_with('\n') {
+            eprintln!();
         }
-        if let Some(file) = &d.file {
-            eprintln!("      file: {}", file.display());
-        }
-        if let Some(hint) = &d.hint {
-            eprintln!("      hint: {hint}");
-        }
+    }
+}
+
+fn compiler_error_message(
+    error: &anyhow::Error,
+    cfg: &Config,
+    colored: bool,
+    verbose: bool,
+) -> String {
+    if let Some(ce) = error.downcast_ref::<CompilerError>() {
+        print_compiler_output(&ce.stderr, cfg, colored, verbose);
+        ce.message.clone()
+    } else {
+        error.to_string()
     }
 }
 
@@ -122,6 +132,20 @@ fn run(cli: &Cli) -> i32 {
             *clean,
             *jobs,
         ),
+        Command::Check {
+            project,
+            configuration,
+            target,
+            strict,
+        } => cmd_check(
+            cli,
+            &config,
+            project,
+            *configuration,
+            target.as_deref(),
+            *strict,
+        ),
+        Command::Explain { code } => cmd_explain(cli, &config, code),
         Command::Inspect { ipa } => cmd_inspect(cli, &config, ipa),
         Command::Validate { ipa } => cmd_validate(cli, &config, ipa),
         Command::Clean { project } => cmd_clean(cli, &config, project),
@@ -140,6 +164,141 @@ fn run(cli: &Cli) -> i32 {
             fail(&format!("{e:#}"), colored);
             exit::FAILURE
         }
+    }
+}
+
+// ------------------------------------------------------------------ check
+
+struct Prepared {
+    project: XcodeProject,
+    target: Target,
+    configuration: String,
+    project_root: PathBuf,
+    sdk_report: Option<SdkReport>,
+    sdk_path: Option<PathBuf>,
+    toolchain: Toolchain,
+    swift_capability: Option<SwiftCapability>,
+}
+
+fn prepare(
+    cli: &Cli,
+    config: &Config,
+    project_path: &Path,
+    configuration: Configuration,
+    target_name: Option<&str>,
+) -> Result<Prepared> {
+    let project = openipa::project::load_project(project_path)?;
+    let target = if let Some(name) = target_name {
+        project
+            .targets
+            .iter()
+            .find(|t| t.name == name)
+            .ok_or_else(|| anyhow::anyhow!("target '{name}' не найден"))?
+            .clone()
+    } else {
+        project
+            .application_targets()
+            .first()
+            .map(|t| (*t).clone())
+            .ok_or_else(|| anyhow::anyhow!("в проекте нет application target"))?
+    };
+    let toolchain = Toolchain::detect()?;
+    let registry = SdkRegistry::load(config)?;
+    let sdk_entry = registry.resolve("", config).ok();
+    let sdk_path = sdk_entry.map(|e| e.path);
+    let sdk_report = match &sdk_path {
+        Some(path) => Some(sdk::inspect_sdk(path)?),
+        None => None,
+    };
+    let swift_capability = if !target.swift_sources().is_empty() {
+        Some(SwiftDriver::new(&toolchain, sdk_report.clone()).capability())
+    } else {
+        None
+    };
+    let _ = cli;
+    Ok(Prepared {
+        project,
+        target,
+        configuration: configuration.to_string(),
+        project_root: project_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from(".")),
+        sdk_report,
+        sdk_path,
+        toolchain,
+        swift_capability,
+    })
+}
+
+fn run_checks(prepared: &Prepared) -> Vec<Diagnostic> {
+    check::analyze(&CheckOptions {
+        project: &prepared.project,
+        target: &prepared.target,
+        configuration: &prepared.configuration,
+        project_root: &prepared.project_root,
+        sdk_report: prepared.sdk_report.as_ref(),
+        toolchain: &prepared.toolchain,
+        swift_capability: prepared.swift_capability.as_ref(),
+    })
+}
+
+fn cmd_check(
+    cli: &Cli,
+    config: &Config,
+    project_path: &Path,
+    configuration: Configuration,
+    target_name: Option<&str>,
+    strict: bool,
+) -> Result<()> {
+    let colored = color_enabled(cli);
+    status("Проверка проекта (до компиляции)...", colored);
+    let prepared = match prepare(cli, config, project_path, configuration, target_name) {
+        Ok(p) => p,
+        Err(e) => {
+            let mut d = Diagnostic::error("E0001", e.to_string()).with_file(project_path);
+            if let Some(catalog) = diagnostics::catalog::lookup("E0001") {
+                d = d.with_hint(catalog.help);
+            }
+            print_diagnostics(&[d], config, colored);
+            bail!("проект не может быть проверен");
+        }
+    };
+    let mut diagnostics = run_checks(&prepared);
+    diagnostics::apply_strict(&mut diagnostics, strict);
+    print_diagnostics(&diagnostics, config, colored);
+    if diagnostics::has_errors(&diagnostics) {
+        bail!(
+            "найдено ошибок: {}",
+            diagnostics
+                .iter()
+                .filter(|d| d.severity == Severity::Error)
+                .count()
+        );
+    }
+    if config.output_format != OutputFormat::Json {
+        success("ошибок не найдено", colored);
+    }
+    Ok(())
+}
+
+fn cmd_explain(cli: &Cli, _config: &Config, code: &str) -> Result<()> {
+    let colored = color_enabled(cli);
+    match diagnostics::catalog::lookup(code) {
+        Some(entry) => {
+            println!(
+                "{} {}",
+                paint(&format!("[{}]", entry.code), "1;36", colored),
+                paint(entry.title, "1", colored)
+            );
+            println!("\n{}", entry.explanation);
+            println!("\nhelp: {}", entry.help);
+            if !entry.aliases.is_empty() {
+                println!("aliases: {}", entry.aliases.join(", "));
+            }
+            Ok(())
+        }
+        None => bail!("неизвестный код диагностики: {code}"),
     }
 }
 
@@ -436,109 +595,43 @@ fn cmd_build(
 ) -> Result<()> {
     let colored = color_enabled(cli);
     status("Анализ проекта...", colored);
-    let project = openipa::project::load_project(project_path)
+    let prepared = prepare(cli, config, project_path, configuration, target_name)
         .with_context(|| format!("не удалось разобрать {}", project_path.display()))?;
     status(
         &format!(
             "проект '{}': targets: {}",
-            project.name,
-            project.targets.len()
+            prepared.project.name,
+            prepared.project.targets.len()
         ),
         colored,
     );
-
-    let target = if let Some(name) = target_name {
-        project
-            .targets
-            .iter()
-            .find(|t| t.name == name)
-            .ok_or_else(|| anyhow::anyhow!("target '{name}' не найден"))?
-    } else {
-        project
-            .application_targets()
-            .first()
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("в проекте нет application target"))?
-    };
-
+    let target = &prepared.target;
     let cfg = target
         .configuration(&configuration.to_string())
         .or_else(|| target.configurations.first())
         .ok_or_else(|| anyhow::anyhow!("у target '{}' нет конфигураций", target.name))?;
     let settings = &cfg.settings;
+    let project_root = prepared.project_root.clone();
+    let toolchain = &prepared.toolchain;
+    let sdk_path = prepared.sdk_path.clone();
+    let sdk_report = prepared.sdk_report.clone();
 
-    status("Проверка тулчейна...", colored);
-    let toolchain = Toolchain::detect()?;
-    let registry = SdkRegistry::load(config)?;
-    let sdk_entry = if sdk_name == "iphoneos" {
-        registry.resolve("", config).ok()
-    } else {
-        None
-    };
-    let sdk_path = sdk_entry.as_ref().map(|e| e.path.clone());
-    let sdk_report = match &sdk_path {
-        Some(p) => Some(sdk::inspect_sdk(p)?),
-        None => None,
-    };
-
-    let mut diagnostics = Vec::new();
-    for warning in &project.parse_warnings {
-        diagnostics.push(
-            Diagnostic::warning("XCODE_SYNC_GROUP_UNSUPPORTED", warning).with_file(&project.path),
-        );
-    }
-    for (key, value) in &settings.unknown {
-        diagnostics.push(
-            Diagnostic::warning(
-                "UNKNOWN_BUILD_SETTING",
-                format!("неизвестная build setting {key} = {value}"),
-            )
-            .with_file(&project.path),
-        );
-    }
-    if !toolchain.can_compile_c() {
-        diagnostics.push(Diagnostic::error("CLANG_MISSING", "clang не найден"));
-    }
-    if !toolchain.can_link_macho() {
-        diagnostics.push(Diagnostic::error(
-            "LD64_LLD_MISSING",
-            "ld64.lld не найден — установите lld",
-        ));
-    }
-
-    // Проверка Swift: честно сообщаем об ограничении, не имитируем компиляцию.
-    let swift_sources = target.swift_sources();
-    let mut swift_capability = None;
-    if !swift_sources.is_empty() {
-        let swift = SwiftDriver::new(&toolchain, sdk_report.clone()).with_verbose(cli.verbose);
-        let capability = swift.capability();
-        diagnostics.extend(capability.diagnostics.clone());
-        swift_capability = Some((capability, swift));
-    }
-
-    if !sdk_report.as_ref().map(|r| r.can_link).unwrap_or(false) {
+    status("Предварительная проверка (Diagnostic Engine)...", colored);
+    let mut diagnostics = run_checks(&prepared);
+    if sdk_name != "iphoneos" {
         diagnostics.push(
             Diagnostic::error(
-                "IOS_SDK_MISSING",
-                "для сборки загружаемого iOS-приложения необходим корректный iPhoneOS.sdk с libSystem и системными Frameworks",
+                "E0101",
+                format!("поддерживается только SDK iphoneos, запрошено: {sdk_name}"),
             )
-            .with_hint("openipa sdk add /path/to/iPhoneOS.sdk"),
+            .with_hint("используйте --sdk iphoneos"),
         );
     }
-    if let (Some(report), Some(min)) = (&sdk_report, settings.iphoneos_deployment_target.as_deref())
-    {
-        if let Err(e) = sdk::check_deployment_target(report, min) {
-            diagnostics.push(
-                Diagnostic::error("DEPLOYMENT_TARGET_INCOMPATIBLE", e.to_string())
-                    .with_file(&project.path),
-            );
-        }
-    }
-
+    diagnostics::apply_strict(&mut diagnostics, false);
     print_diagnostics(&diagnostics, config, colored);
-    if diagnostics.iter().any(|d| d.severity == Severity::Error) {
+    if diagnostics::has_errors(&diagnostics) {
         bail!(
-            "сборка остановлена: {}.error(s). Никакой фиктивный IPA не создаётся.",
+            "сборка остановлена до компиляции: {} ошиб(ок). Никакой фиктивный IPA не создаётся.",
             diagnostics
                 .iter()
                 .filter(|d| d.severity == Severity::Error)
@@ -546,10 +639,17 @@ fn cmd_build(
         );
     }
 
-    let project_root = project_path
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."));
+    let swift_sources = target.swift_sources();
+    let swift_capability = if !swift_sources.is_empty() {
+        let swift = SwiftDriver::new(toolchain, sdk_report.clone()).with_verbose(cli.verbose);
+        prepared
+            .swift_capability
+            .clone()
+            .map(|capability| (capability, swift))
+    } else {
+        None
+    };
+
     let build_root = config.build_root(&project_root);
     let obj_dir = build_root.join("objects");
     fs::create_dir_all(&obj_dir)?;
@@ -571,7 +671,7 @@ fn cmd_build(
         .unwrap_or_else(|| "16.0".into());
 
     status("Компиляция C/C++/Objective-C...", colored);
-    let clang = ClangDriver::new(&toolchain, sdk_path.clone())
+    let clang = ClangDriver::new(toolchain, sdk_path.clone())
         .with_min_os(min_os.clone())
         .with_verbose(cli.verbose);
     let mut objects = Vec::new();
@@ -652,7 +752,11 @@ fn cmd_build(
                 }
             }
             Some(Err(e)) => {
-                return Err(anyhow::anyhow!("ошибка компиляции {}: {e}", src.display()))
+                let message = compiler_error_message(e, config, colored, cli.verbose);
+                return Err(anyhow::anyhow!(
+                    "ошибка компиляции {}: {message}",
+                    src.display()
+                ));
             }
             None => {}
         }
@@ -681,11 +785,11 @@ fn cmd_build(
                 let out = swift.compile_object(&source, &obj)?;
                 let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
                 if !out.status.success() {
+                    print_compiler_output(&stderr, config, colored, cli.verbose);
                     bail!(
-                        "компиляция Swift {} завершилась с кодом {}:\n{}",
+                        "компиляция Swift {} завершилась с кодом {}",
                         source.display(),
-                        out.status.code().unwrap_or(-1),
-                        stderr.trim_end()
+                        out.status.code().unwrap_or(-1)
                     );
                 }
                 if !obj.exists() {
@@ -713,7 +817,7 @@ fn cmd_build(
             }
         })
         .collect();
-    let linker = Linker::new(&toolchain, sdk_path.clone(), min_os.clone(), sdk_version)
+    let linker = Linker::new(toolchain, sdk_path.clone(), min_os.clone(), sdk_version)
         .with_frameworks(target.frameworks.clone())
         .with_framework_search_paths(framework_search_paths)
         .with_other_ldflags(settings.other_ldflags.clone())
@@ -724,7 +828,13 @@ fn cmd_build(
                 .unwrap_or(false),
         );
     let exe = build_root.join(&target.name);
-    let link = linker.link(&objects, &exe)?;
+    let link = match linker.link(&objects, &exe) {
+        Ok(result) => result,
+        Err(e) => {
+            let message = compiler_error_message(&e, config, colored, cli.verbose);
+            bail!("{message}");
+        }
+    };
     diagnostics.extend(link.diagnostics);
     if !link.loadable_on_ios {
         bail!(

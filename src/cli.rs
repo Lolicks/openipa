@@ -78,6 +78,27 @@ pub enum Command {
         jobs: Option<usize>,
     },
 
+    /// Предварительная проверка проекта до компиляции
+    Check {
+        /// Путь к .xcodeproj или каталогу проекта
+        project: std::path::PathBuf,
+        /// Конфигурация сборки
+        #[arg(short, long, value_enum, default_value = "debug")]
+        configuration: Configuration,
+        /// Имя target
+        #[arg(long)]
+        target: Option<String>,
+        /// Превратить предупреждения в ошибки
+        #[arg(long, action = ArgAction::SetTrue)]
+        strict: bool,
+    },
+
+    /// Объяснить код диагностики
+    Explain {
+        /// Код, например E0102
+        code: String,
+    },
+
     /// Показать информацию о собранном IPA
     Inspect { ipa: std::path::PathBuf },
 

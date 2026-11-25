@@ -14,8 +14,9 @@ OpenIPA — независимый конвейер, каждый этап ко�
 3. **Select** — выбрать target и конфигурацию (Debug/Release).
 4. **Toolchain** — обнаружить clang/clang++/swiftc/ld64.lld.
 5. **SDK** — загрузить реестр, проверить структуру SDK.
-6. **Gate** — диагностика неизвестных настроек, отсутствия SDK, Swift-ограничения.
-   При наличии ошибок сборка останавливается **до** создания IPA.
+6. **Gate** — Pre-build Analyzer: diagnostics-style проверки проекта, SDK, toolchain,
+   build settings, ресурсов и asset catalogs. При наличии ошибок сборка
+   останавливается **до** запуска компиляторов и создания IPA.
 7. **Compile** — clang `-target arm64-apple-ios` для C/C++/ObjC/ObjC++ → Mach-O объекты.
    Параллельно через rayon, инкрементально через SHA-256 кэш.
 8. **Link** — `ld64.lld -arch arm64 -platform_version ios ...` → MH_EXECUTE.
@@ -26,6 +27,10 @@ OpenIPA — независимый конвейер, каждый этап ко�
 
 ## Модули и их ответственность
 
+- `diagnostics.rs` — ошибки/предупреждения, рендеринг в стиле rustc, JSON-бандл.
+- `diagnostics/catalog.rs` — уникальные коды E/W/I и объяснения для `openipa explain`.
+- `diagnostics/compiler.rs` — разбор вывода Clang/Swift/ld64.lld без выдуманных локаций.
+- `check.rs` — Pre-build Analyzer: все проверки до запуска компиляторов.
 - `project/settings.rs` (.xcconfig + expand) — раскрытие `$(VAR)`/`$(inherited)`,
   разбор `#include`, conditional keys, приоритет слоёв.
 - `project/pbxproj.rs` — токенизатор OpenStep: dict, array, string, data, комментарии.
